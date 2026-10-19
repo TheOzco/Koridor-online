@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بازی آنلاین کوریدور (Quoridor P2P)</title>
+    <!-- PeerJS Library for P2P WebRTC Connection -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --panel-bg: #16213e;
+            --board-bg: #0f3460;
+            --cell-bg: #e94560;
+            --cell-empty: #222d4a;
+            --p1-color: #00fff2;
+            --p2-color: #ff0055;
+            --wall-color: #f39c12;
+            --wall-preview: rgba(243, 156, 18, 0.5);
+            --text-color: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: var(--p1-color);
+            text-shadow: 0 0 10px rgba(0,255,242,0.3);
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            padding: 12px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 450px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .connection-box {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 5px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #fff;
+            font-size: 0.9rem;
+            text-align: center;
+            direction: ltr;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        button:active {
+            transform: scale(0.96);
+        }
+
+        button.secondary {
+            background: #475569;
+        }
+
+        .status-bar {
+            text-align: center;
+            font-size: 0.95rem;
+            margin-top: 5px;
+            font-weight: bold;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            background: rgba(0,0,0,0.2);
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+
+        .player-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .player-info.active {
+            border-bottom: 2px solid #fff;
+        }
+
+        .p1-text { color: var(--p1-color); }
+        .p2-text { color: var(--p2-color); }
+
+        .board-container {
+            position: relative;
+            width: 100%;
+            max-width: 420px;
+            aspect-ratio: 1;
+            background: var(--board-bg);
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            gap: 12px;
+        }
+
+        .cell {
+            background: var(--cell-empty);
+            border-radius: 6px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .cell.valid-move {
+            background: rgba(0, 255, 242, 0.2);
+            box-shadow: inset 0 0 8px var(--p1-color);
+        }
+
+        .pawn {
+            width: 70%;
+            height: 70%;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: all 0.2s ease-in-out;
+        }
+
+        .pawn.p1 {
+            background: var(--p1-color);
+            box-shadow: 0 0 12px var(--p1-color);
+        }
+
+        .pawn.p2 {
+            background: var(--p2-color);
+            box-shadow: 0 0 12px var(--p2-color);
+        }
+
+        /* Wall Grid Placement Overlay */
+        .wall-space-h, .wall-space-v {
+            position: absolute;
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        .wall-space-h {
+            height: 12px;
+            left: 0;
+            right: 0;
+            bottom: -12px;
+        }
+
+        .wall-space-v {
+            width: 12px;
+            top: 0;
+            bottom: 0;
+            left: -12px;
+        }
+
+        .placed-wall {
+            position: absolute;
+            background: var(--wall-color);
+            z-index: 20;
+            border-radius: 4px;
+            box-shadow: 0 0 8px rgba(243, 156, 18, 0.8);
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 420px;
+            margin-top: 12px;
+            gap: 10px;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 12px;
+            font-size: 1rem;
+            background: #3b82f6;
+            border-radius: 8px;
+        }
+
+        .toggle-btn.wall-mode {
+            background: var(--wall-color);
+            color: #000;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: none;
+            z-index: 100;
+            border: 1px solid #555;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>کوریدور آنلاین (P2P)</h1>
+
+    <div class="panel">
+        <div class="connection-box" id="connBox">
+            <div style="font-size: 0.85rem; color: #aaa; text-align: center;">شناسه (ID) شما:</div>
+            <div class="input-group">
+                <input type="text" id="myId" readonly placeholder="در حال دریافت..." />
+                <button onclick="copyMyId()" class="secondary">کپی</button>
+            </div>
+            <div class="input-group" style="margin-top: 5px;">
+                <input type="text" id="peerIdInput" placeholder="شناسه حریف را وارد کنید..." />
+                <button onclick="connectToPeer()">اتصال</button>
+            </div>
+        </div>
+
+        <div class="status-bar" id="statusBar">آماده اتصال یا شروع بازی تک‌دستگاه</div>
+
+        <div class="game-info">
+            <div class="player-info" id="p1Info">
+                <span class="p1-text">بازیکن ۱ (آبی)</span>
+                <span>دیوار: <b id="p1Walls">10</b></span>
+            </div>
+            <button class="secondary" onclick="resetGame()" style="font-size:0.75rem; padding: 4px 8px;">شروع مجدد</button>
+            <div class="player-info" id="p2Info">
+                <span class="p2-text">بازیکن ۲ (قرمز)</span>
+                <span>دیوار: <b id="p2Walls">10</b></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="board-container" id="board"></div>
+
+    <div class="controls">
+        <button class="toggle-btn" id="modeBtn" onclick="toggleMode()">حالت: حرکت مهره</button>
+        <button class="toggle-btn secondary" id="dirBtn" onclick="toggleDir()" style="display:none;">جهت: افقی</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Game State Variables
+        const BOARD_SIZE = 9;
+        let p1 = { r: 8, c: 4, walls: 10 };
+        let p2 = { r: 0, c: 4, walls: 10 };
+        let turn = 1; // 1 or 2
+        let hWalls = Array(8).fill(null).map(() => Array(8).fill(false));
+        let vWalls = Array(8).fill(null).map(() => Array(8).fill(false));
+
+        let mode = 'MOVE'; // 'MOVE' or 'WALL'
+        let wallDir = 'H'; // 'H' or 'V'
+        let myRole = null; // 1, 2 or null (if offline local)
+        let conn = null;
+        let peer = null;
+
+        // Init PeerJS
+        function initPeer() {
+            peer = new Peer();
+            peer.on('open', (id) => {
+                document.getElementById('myId').value = id;
+            });
+
+            peer.on('connection', (c) => {
+                conn = c;
+                myRole = 2; // Incoming connection is Player 2
+                setupConn();
+                showToast('حریف به شما متصل شد! شما بازیکن ۱ هستید.');
+            });
+        }
+
+        function connectToPeer() {
+            const destId = document.getElementById('peerIdInput').value.trim();
+            if (!destId) return alert('لطفاً شناسه حریف را وارد کنید.');
+            conn = peer.connect(destId);
+            myRole = 2; // Connected client is Player 2
+            setupConn();
+        }
+
+        function setupConn() {
+            conn.on('open', () => {
+                if (myRole === 2) {
+                    myRole = 2;
+                    showToast('با موفقیت متصل شدید! شما بازیکن ۲ هستید.');
+                }
+                updateStatus();
+                sendState();
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'SYNC') {
+                    p1 = data.p1;
+                    p2 = data.p2;
+                    turn = data.turn;
+                    hWalls = data.hWalls;
+                    vWalls = data.vWalls;
+                    renderBoard();
+                    updateStatus();
+                }
+            });
+        }
+
+        function sendState() {
+            if (conn && conn.open) {
+                conn.send({
+                    type: 'SYNC',
+                    p1, p2, turn, hWalls, vWalls
+                });
+            }
+        }
+
+        function copyMyId() {
+            const idInput = document.getElementById('myId');
+            idInput.select();
+            navigator.clipboard.writeText(idInput.value);
+            showToast('شناسه در حافظه کپی شد.');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
+
+        function toggleMode() {
+            if (mode === 'MOVE') {
+                mode = 'WALL';
+                document.getElementById('modeBtn').innerText = 'حالت: گذاشتن دیوار';
+                document.getElementById('modeBtn').classList.add('wall-mode');
+                document.getElementById('dirBtn').style.display = 'block';
+            } else {
+                mode = 'MOVE';
+                document.getElementById('modeBtn').innerText = 'حالت: حرکت مهره';
+                document.getElementById('modeBtn').classList.remove('wall-mode');
+                document.getElementById('dirBtn').style.display = 'none';
+            }
+            renderBoard();
+        }
+
+        function toggleDir() {
+            wallDir = wallDir === 'H' ? 'V' : 'H';
+            document.getElementById('dirBtn').innerText = `جهت: ${wallDir === 'H' ? 'افقی' : 'عمودی'}`;
+        }
+
+        function updateStatus() {
+            const sb = document.getElementById('statusBar');
+            document.getElementById('p1Walls').innerText = p1.walls;
+            document.getElementById('p2Walls').innerText = p2.walls;
+
+            document.getElementById('p1Info').classList.toggle('active', turn === 1);
+            document.getElementById('p2Info').classList.toggle('active', turn === 2);
+
+            let roleText = myRole ? `(شما: بازیکن ${myRole})` : '(بازی محلی)';
+            if (turn === 1) {
+                sb.innerHTML = `<span class="p1-text">نوبت بازیکن ۱ (آبی)</span> ${roleText}`;
+            } else {
+                sb.innerHTML = `<span class="p2-text">نوبت بازیکن ۲ (قرمز)</span> ${roleText}`;
+            }
+        }
+
+        function isMyTurn() {
+            if (!myRole) return true; // Local play
+            return myRole === turn;
+        }
+
+        // Check valid pawn moves
+        function getValidMoves(pawn, opponent) {
+            const moves = [];
+            const dirs = [
+                { r: -1, c: 0 }, { r: 1, c: 0 },
+                { r: 0, c: -1 }, { r: 0, c: 1 }
+            ];
+
+            dirs.forEach(d => {
+                const nr = pawn.r + d.r;
+                const nc = pawn.c + d.c;
+
+                if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) {
+                    if (!isWallBetween(pawn.r, pawn.c, nr, nc)) {
+                        if (nr === opponent.r && nc === opponent.c) {
+                            // Jump over opponent
+                            const nnr = nr + d.r;
+                            const nnc = nc + d.c;
+                            if (nnr >= 0 && nnr < 9 && nnc >= 0 && nnc < 9 && !isWallBetween(nr, nc, nnr, nnc)) {
+                                moves.push({ r: nnr, c: nnc });
+                            } else {
+                                // Diagonal jump if blocked behind
+                                const sideDirs = d.r !== 0 ? [{ r: 0, c: -1 }, { r: 0, c: 1 }] : [{ r: -1, c: 0 }, { r: 1, c: 0 }];
+                                sideDirs.forEach(sd => {
+                                    const snr = nr + sd.r;
+                                    const snc = nc + sd.c;
+                                    if (snr >= 0 && snr < 9 && snc >= 0 && snc < 9 && !isWallBetween(nr, nc, snr, snc)) {
+                                        moves.push({ r: snr, c: snc });
+                                    }
+                                });
+                            }
+                        } else {
+                            moves.push({ r: nr, c: nc });
+                        }
+                    }
+                }
+            });
+            return moves;
+        }
+
+        function isWallBetween(r1, c1, r2, c2) {
+            if (r1 === r2) { // Horizontal move
+                const minC = Math.min(c1, c2);
+                if (r1 > 0 && vWalls[r1 - 1][minC]) return true;
+                if (r1 < 8 && vWalls[r1][minC]) return true;
+            } else if (c1 === c2) { // Vertical move
+                const minR = Math.min(r1, r2);
+                if (c1 > 0 && hWalls[minR][c1 - 1]) return true;
+                if (c1 < 8 && hWalls[minR][c1]) return true;
+            }
+            return false;
+        }
+
+        // BFS to check path existence
+        function hasPath(pawn, targetRow) {
+            const visited = Array(9).fill(null).map(() => Array(9).fill(false));
+            const queue = [{ r: pawn.r, c: pawn.c }];
+            visited[pawn.r][pawn.c] = true;
+
+            const dirs = [{ r: -1, c: 0 }, { r: 1, c: 0 }, { r: 0, c: -1 }, { r: 0, c: 1 }];
+
+            while (queue.length > 0) {
+                const curr = queue.shift();
+                if (curr.r === targetRow) return true;
+
+                for (let d of dirs) {
+                    const nr = curr.r + d.r;
+                    const nc = curr.c + d.c;
+                    if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9 && !visited[nr][nc]) {
+                        if (!isWallBetween(curr.r, curr.c, nr, nc)) {
+                            visited[nr][nc] = true;
+                            queue.push({ r: nr, c: nc });
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function canPlaceWall(r, c, isVert) {
+            const currPlayer = turn === 1 ? p1 : p2;
+            if (currPlayer.walls <= 0) return false;
+            if (r < 0 || r >= 8 || c < 0 || c >= 8) return false;
+
+            if (isVert) {
+                if (vWalls[r][c]) return false;
+                if (r > 0 && vWalls[r - 1][c]) return false;
+                if (r < 7 && vWalls[r + 1][c]) return false;
+                if (hWalls[r][c]) return false; // Overlap at intersection
+            } else {
+                if (hWalls[r][c]) return false;
+                if (c > 0 && hWalls[r][c - 1]) return false;
+                if (c < 7 && hWalls[r][c + 1]) return false;
+                if (vWalls[r][c]) return false; // Overlap at intersection
+            }
+
+            // Temporarily place wall to test path closure
+            if (isVert) vWalls[r][c] = true;
+            else hWalls[r][c] = true;
+
+            const valid = hasPath(p1, 0) && hasPath(p2, 8);
+
+            // Revert
+            if (isVert) vWalls[r][c] = false;
+            else hWalls[r][c] = false;
+
+            return valid;
+        }
+
+        function placeWall(r, c, isVert) {
+            if (!isMyTurn()) return showToast('نوبت شما نیست!');
+            if (!canPlaceWall(r, c, isVert)) return showToast('امکان قرار دادن دیوار در این مکان وجود ندارد (مسیر مسدود می‌شود یا همپوشانی دارد).');
+
+            if (isVert) vWalls[r][c] = true;
+            else hWalls[r][c] = true;
+
+            if (turn === 1) p1.walls--;
+            else p2.walls--;
+
+            turn = turn === 1 ? 2 : 1;
+            renderBoard();
+            updateStatus();
+            sendState();
+        }
+
+        function movePawn(r, c) {
+            if (!isMyTurn()) return showToast('نوبت شما نیست!');
+            const currPawn = turn === 1 ? p1 : p2;
+            const oppPawn = turn === 1 ? p2 : p1;
+            const validMoves = getValidMoves(currPawn, oppPawn);
+
+            const isValid = validMoves.some(m => m.r === r && m.c === c);
+            if (!isValid) return;
+
+            currPawn.r = r;
+            currPawn.c = c;
+
+            // Check Win
+            if (p1.r === 0) {
+                alert('بازیکن ۱ (آبی) برنده شد!');
+                resetGame();
+                return;
+            }
+            if (p2.r === 8) {
+                alert('بازیکن ۲ (قرمز) برنده شد!');
+                resetGame();
+                return;
+            }
+
+            turn = turn === 1 ? 2 : 1;
+            renderBoard();
+            updateStatus();
+            sendState();
+        }
+
+        function renderBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+
+            const currPawn = turn === 1 ? p1 : p2;
+            const oppPawn = turn === 1 ? p2 : p1;
+            const validMoves = getValidMoves(currPawn, oppPawn);
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+
+                    // Check valid move highlight
+                    if (mode === 'MOVE' && isMyTurn() && validMoves.some(m => m.r === r && m.c === c)) {
+                        cell.classList.add('valid-move');
+                        cell.onclick = () => movePawn(r, c);
+                    }
+
+                    // Draw Pawns
+                    if (p1.r === r && p1.c === c) {
+                        const p = document.createElement('div');
+                        p.className = 'pawn p1';
+                        cell.appendChild(p);
+                    } else if (p2.r === r && p2.c === c) {
+                        const p = document.createElement('div');
+                        p.className = 'pawn p2';
+                        cell.appendChild(p);
+                    }
+
+                    // Wall Placement Buttons/Hover overlay inside cells
+                    if (mode === 'WALL' && isMyTurn()) {
+                        if (r < 8 && c < 8) {
+                            const wBtn = document.createElement('div');
+                            wBtn.style.position = 'absolute';
+                            wBtn.style.width = '20px';
+                            wBtn.style.height = '20px';
+                            wBtn.style.bottom = '-10px';
+                            wBtn.style.left = '-10px';
+                            wBtn.style.zIndex = '30';
+                            wBtn.style.cursor = 'pointer';
+                            wBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                placeWall(r, c, wallDir === 'V');
+                            };
+                            cell.appendChild(wBtn);
+                        }
+                    }
+
+                    boardEl.appendChild(cell);
+                }
+            }
+
+            // Render Placed Walls
+            renderPlacedWalls();
+        }
+
+        function renderPlacedWalls() {
+            const boardEl = document.getElementById('board');
+            const boardRect = boardEl.getBoundingClientRect();
+            const cellSize = (boardRect.width - 20 - (8 * 12)) / 9; // Calculate cell gap dynamically
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (hWalls[r][c]) {
+                        const wall = document.createElement('div');
+                        wall.className = 'placed-wall';
+                        wall.style.height = '12px';
+                        wall.style.width = `calc(${(cellSize * 2) + 12}px)`;
+                        wall.style.top = `calc(10px + ${(r + 1) * cellSize}px + ${r * 12}px)`;
+                        wall.style.left = `calc(10px + ${c * cellSize}px + ${c * 12}px)`;
+                        boardEl.appendChild(wall);
+                    }
+                    if (vWalls[r][c]) {
+                        const wall = document.createElement('div');
+                        wall.className = 'placed-wall';
+                        wall.style.width = '12px';
+                        wall.style.height = `calc(${(cellSize * 2) + 12}px)`;
+                        wall.style.left = `calc(10px + ${(c + 1) * cellSize}px + ${c * 12}px)`;
+                        wall.style.top = `calc(10px + ${r * cellSize}px + ${r * 12}px)`;
+                        boardEl.appendChild(wall);
+                    }
+                }
+            }
+        }
+
+        function resetGame() {
+            p1 = { r: 8, c: 4, walls: 10 };
+            p2 = { r: 0, c: 4, walls: 10 };
+            turn = 1;
+            hWalls = Array(8).fill(null).map(() => Array(8).fill(false));
+            vWalls = Array(8).fill(null).map(() => Array(8).fill(false));
+            renderBoard();
+            updateStatus();
+            sendState();
+        }
+
+        window.addEventListener('resize', renderBoard);
+        window.onload = () => {
+            initPeer();
+            renderBoard();
+            updateStatus();
+        };
+    </script>
+</body>
+</html>
