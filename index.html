@@ -8,15 +8,15 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root {
-            --bg-color: #f1f5f9;
+            --bg-color: #f8fafc;
             --board-bg: #ffffff;
-            --cell-bg: #e2e8f0;
-            --cell-hover: #cbd5e1;
+            --cell-bg: #f1f5f9;
+            --cell-hover: #e2e8f0;
             --p1-color: #2563eb;
             --p2-color: #dc2626;
             --wall-color: #d97706;
-            --gap-size: 12px;
-            --cell-size: 36px;
+            --slot-bg: #e2e8f0;
+            --slot-hover: #cbd5e1;
         }
 
         * {
@@ -39,7 +39,6 @@
             padding: 10px;
         }
 
-        /* Lobby & Connection Screen */
         .card {
             background: #ffffff;
             padding: 20px;
@@ -49,6 +48,7 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.08);
             text-align: center;
             margin-bottom: 15px;
+            border: 1px solid #e2e8f0;
         }
 
         h1 {
@@ -82,7 +82,7 @@
             font-weight: bold;
             cursor: pointer;
             font-size: 0.9rem;
-            transition: background 0.2s;
+            transition: opacity 0.2s;
         }
 
         button:active {
@@ -93,13 +93,12 @@
             background: #64748b;
         }
 
-        /* Hidden elements initially */
         #gameArea {
             display: none;
             flex-direction: column;
             align-items: center;
             width: 100%;
-            max-width: 420px;
+            max-width: 440px;
         }
 
         .game-header {
@@ -113,6 +112,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             font-size: 0.9rem;
             font-weight: bold;
+            border: 1px solid #e2e8f0;
         }
 
         .p1-badge { color: var(--p1-color); }
@@ -126,25 +126,16 @@
             text-align: center;
         }
 
-        /* Board Styling */
-        .board-wrapper {
-            position: relative;
+        /* 17x17 Quoridor Board Grid */
+        .board {
+            display: grid;
+            grid-template-columns: 36px 10px 36px 10px 36px 10px 36px 10px 36px 10px 36px 10px 36px 10px 36px 10px 36px;
+            grid-template-rows: 36px 10px 36px 10px 36px 10px 36px 10px 36px 10px 36px 10px 36px 10px 36px 10px 36px;
             background: var(--board-bg);
             padding: 12px;
             border-radius: 16px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
             border: 2px solid #e2e8f0;
-            touch-action: manipulation;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(9, 1fr);
-            grid-template-rows: repeat(9, 1fr);
-            gap: var(--gap-size);
-            width: 320px;
-            height: 320px;
-            position: relative;
         }
 
         .cell {
@@ -154,11 +145,15 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            position: relative;
+            transition: background 0.2s;
+        }
+
+        .cell:hover {
+            background: var(--cell-hover);
         }
 
         .cell.valid {
-            background: #bfdbfe;
+            background: #dbeafe;
             box-shadow: inset 0 0 0 2px var(--p1-color);
         }
 
@@ -166,48 +161,44 @@
             width: 24px;
             height: 24px;
             border-radius: 50%;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
             z-index: 5;
         }
 
         .pawn.p1 { background: var(--p1-color); }
         .pawn.p2 { background: var(--p2-color); }
 
-        /* Direct Wall Touch Spots */
-        .wall-spot-h {
-            position: absolute;
-            height: var(--gap-size);
-            width: calc(2 * var(--cell-size) + var(--gap-size));
-            z-index: 10;
+        /* Touchable Wall Slots */
+        .wall-slot-h {
+            background-color: var(--slot-bg);
+            border-radius: 3px;
             cursor: pointer;
+            transition: background 0.2s;
+        }
+        .wall-slot-h:hover {
+            background-color: var(--slot-hover);
         }
 
-        .wall-spot-v {
-            position: absolute;
-            width: var(--gap-size);
-            height: calc(2 * var(--cell-size) + var(--gap-size));
-            z-index: 10;
+        .wall-slot-v {
+            background-color: var(--slot-bg);
+            border-radius: 3px;
             cursor: pointer;
+            transition: background 0.2s;
+        }
+        .wall-slot-v:hover {
+            background-color: var(--slot-hover);
+        }
+
+        .intersection {
+            background-color: #e2e8f0;
+            border-radius: 2px;
         }
 
         .placed-wall {
-            position: absolute;
-            background: var(--wall-color);
+            background-color: var(--wall-color) !important;
             border-radius: 4px;
-            z-index: 8;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-
-        .wall-dir-toggle {
-            margin-top: 10px;
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #fff;
-            padding: 8px 12px;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            cursor: default !important;
         }
 
         .toast {
@@ -228,7 +219,7 @@
     <!-- Connection Screen -->
     <div class="card" id="connCard">
         <h1>کوریدور آنلاین</h1>
-        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 10px;">کد زیر را به حریف بدهید یا کد او را وارد کنید:</p>
+        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 10px;">کد خود را به حریف بدهید یا کد او را وارد کنید:</p>
         
         <div class="input-group">
             <input type="text" id="myId" readonly placeholder="در حال ساخت شناسه..." />
@@ -241,7 +232,7 @@
         </div>
 
         <hr style="margin: 15px 0; border: none; border-top: 1px solid #e2e8f0;">
-        <button onclick="startLocalGame()" style="width: 100%; background: #475569;">بازی آنلاین نیست؟ شروع تمرینی با یک گوشی</button>
+        <button onclick="startLocalGame()" style="width: 100%; background: #475569;">بازی آفلاین (روی یک گوشی دو نفره)</button>
     </div>
 
     <!-- Main Game Board Area -->
@@ -253,28 +244,19 @@
 
         <div class="status-msg" id="statusMsg">در حال بارگذاری...</div>
 
-        <div class="board-wrapper">
-            <div class="grid" id="board"></div>
-        </div>
-
-        <div class="wall-dir-toggle">
-            <span style="font-size: 0.85rem; color: #475569;">جهت دیواری که می‌گذارید:</span>
-            <button onclick="toggleWallDir()" id="dirBtn" style="background: var(--wall-color);">افقی ▬</button>
-        </div>
+        <div class="board" id="board"></div>
     </div>
 
     <div class="toast" id="toast"></div>
 
     <script>
-        const BOARD_SIZE = 9;
         let p1 = { r: 8, c: 4, walls: 10 };
         let p2 = { r: 0, c: 4, walls: 10 };
         let turn = 1;
         let hWalls = Array(8).fill(null).map(() => Array(8).fill(false));
         let vWalls = Array(8).fill(null).map(() => Array(8).fill(false));
 
-        let currentWallDir = 'H'; // 'H' or 'V'
-        let myRole = null; // 1, 2 or null (local)
+        let myRole = null; 
         let conn = null;
         let peer = null;
 
@@ -286,7 +268,7 @@
 
             peer.on('connection', c => {
                 conn = c;
-                myRole = 1; // Host is Player 1
+                myRole = 1; 
                 setupConnection();
                 startGameUI();
                 showToast('حریف وصل شد! شما بازیکن ۱ (آبی) هستید.');
@@ -297,7 +279,7 @@
             const destId = document.getElementById('peerIdInput').value.trim();
             if (!destId) return alert('کد حریف را وارد کنید!');
             conn = peer.connect(destId);
-            myRole = 2; // Guest is Player 2
+            myRole = 2; 
             setupConnection();
         }
 
@@ -356,11 +338,6 @@
             setTimeout(() => t.style.display = 'none', 3000);
         }
 
-        function toggleWallDir() {
-            currentWallDir = currentWallDir === 'H' ? 'V' : 'H';
-            document.getElementById('dirBtn').innerText = currentWallDir === 'H' ? 'افقی ▬' : 'عمودی ❚';
-        }
-
         function isMyTurn() {
             if (!myRole) return true;
             return myRole === turn;
@@ -378,7 +355,6 @@
             }
         }
 
-        // Moves calculation
         function getValidMoves(pawn, opponent) {
             const moves = [];
             const dirs = [{ r: -1, c: 0 }, { r: 1, c: 0 }, { r: 0, c: -1 }, { r: 0, c: 1 }];
@@ -388,7 +364,6 @@
                 const nc = pawn.c + d.c;
                 if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9 && !isWallBetween(pawn.r, pawn.c, nr, nc)) {
                     if (nr === opponent.r && nc === opponent.c) {
-                        // Jump over
                         const nnr = nr + d.r;
                         const nnc = nc + d.c;
                         if (nnr >= 0 && nnr < 9 && nnc >= 0 && nnc < 9 && !isWallBetween(nr, nc, nnr, nnc)) {
@@ -415,7 +390,6 @@
             return false;
         }
 
-        // BFS path check
         function hasPath(pawn, targetRow) {
             const visited = Array(9).fill(null).map(() => Array(9).fill(false));
             const queue = [{ r: pawn.r, c: pawn.c }];
@@ -460,10 +434,9 @@
             return valid;
         }
 
-        function placeWall(r, c) {
+        function placeWall(r, c, isVert) {
             if (!isMyTurn()) return showToast('نوبت شما نیست!');
-            const isVert = currentWallDir === 'V';
-            if (!canPlaceWall(r, c, isVert)) return showToast('دیوار نمی‌تواند مسیر را کاملاً ببندد!');
+            if (!canPlaceWall(r, c, isVert)) return showToast('دیوار نمی‌تواند مسیر را کاملاً ببندد یا تداخل دارد!');
 
             if (isVert) vWalls[r][c] = true;
             else hWalls[r][c] = true;
@@ -500,10 +473,13 @@
             const oppPawn = turn === 1 ? p2 : p1;
             const validMoves = getValidMoves(currPawn, oppPawn);
 
+            // 1. Render Cells
             for (let r = 0; r < 9; r++) {
                 for (let c = 0; c < 9; c++) {
                     const cell = document.createElement('div');
                     cell.className = 'cell';
+                    cell.style.gridRow = (r * 2) + 1;
+                    cell.style.gridColumn = (c * 2) + 1;
 
                     if (isMyTurn() && validMoves.some(m => m.r === r && m.c === c)) {
                         cell.classList.add('valid');
@@ -524,67 +500,51 @@
                 }
             }
 
-            renderTouchWallSpots();
-            renderPlacedWalls();
-        }
-
-        // Invisible touch overlay for placing walls easily without changing modes
-        function renderTouchWallSpots() {
-            const board = document.getElementById('board');
-            const cellSize = 36;
-            const gap = 12;
-
+            // 2. Render Horizontal Wall Slots
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
-                    const spot = document.createElement('div');
-                    spot.className = currentWallDir === 'H' ? 'wall-spot-h' : 'wall-spot-v';
-                    
-                    const top = (r + 1) * cellSize + r * gap;
-                    const left = (c + 1) * cellSize + c * gap;
+                    const slot = document.createElement('div');
+                    slot.className = 'wall-slot-h';
+                    slot.style.gridRow = (r * 2) + 2;
+                    slot.style.gridColumn = `${(c * 2) + 1} / span 3`;
 
-                    if (currentWallDir === 'H') {
-                        spot.style.top = (top) + 'px';
-                        spot.style.left = (c * cellSize + c * gap) + 'px';
-                    } else {
-                        spot.style.top = (r * cellSize + r * gap) + 'px';
-                        spot.style.left = (left) + 'px';
+                    if (hWalls[r][c]) {
+                        slot.classList.add('placed-wall');
+                    } else if (isMyTurn()) {
+                        slot.onclick = () => placeWall(r, c, false);
                     }
 
-                    spot.onclick = (e) => {
-                        e.stopPropagation();
-                        placeWall(r, c);
-                    };
-
-                    board.appendChild(spot);
+                    board.appendChild(slot);
                 }
             }
-        }
 
-        function renderPlacedWalls() {
-            const board = document.getElementById('board');
-            const cellSize = 36;
-            const gap = 12;
-
+            // 3. Render Vertical Wall Slots
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
-                    if (hWalls[r][c]) {
-                        const w = document.createElement('div');
-                        w.className = 'placed-wall';
-                        w.style.height = gap + 'px';
-                        w.style.width = (2 * cellSize + gap) + 'px';
-                        w.style.top = ((r + 1) * cellSize + r * gap) + 'px';
-                        w.style.left = (c * cellSize + c * gap) + 'px';
-                        board.appendChild(w);
-                    }
+                    const slot = document.createElement('div');
+                    slot.className.value = 'wall-slot-v';
+                    slot.style.gridRow = `${(r * 2) + 1} / span 3`;
+                    slot.style.gridColumn = (c * 2) + 2;
+                    slot.className = 'wall-slot-v';
+
                     if (vWalls[r][c]) {
-                        const w = document.createElement('div');
-                        w.className = 'placed-wall';
-                        w.style.width = gap + 'px';
-                        w.style.height = (2 * cellSize + gap) + 'px';
-                        w.style.top = (r * cellSize + r * gap) + 'px';
-                        w.style.left = ((c + 1) * cellSize + c * gap) + 'px';
-                        board.appendChild(w);
+                        slot.classList.add('placed-wall');
+                    } else if (isMyTurn()) {
+                        slot.onclick = () => placeWall(r, c, true);
                     }
+
+                    board.appendChild(slot);
+                }
+            }
+
+            // 4. Render Intersections
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const inter = document.createElement('div');
+                    inter.className = 'intersection';
+                    inter.style.gridRow = (r * 2) + 2;
+                    inter.style.gridColumn = (c * 2) + 2;
+                    board.appendChild(inter);
                 }
             }
         }
