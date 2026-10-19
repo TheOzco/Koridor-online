@@ -10,13 +10,14 @@
         :root {
             --bg-color: #f8fafc;
             --board-bg: #ffffff;
-            --cell-bg: #f1f5f9;
-            --cell-hover: #e2e8f0;
+            --cell-bg: #ffffff;
+            --cell-hover: #f1f5f9;
             --p1-color: #2563eb;
             --p2-color: #dc2626;
             --wall-color: #d97706;
-            --slot-bg: #e2e8f0;
-            --slot-hover: #cbd5e1;
+            --slot-bg: #f1f5f9;
+            --slot-hover: #fef3c7;
+            --slot-border: #cbd5e1;
         }
 
         * {
@@ -138,55 +139,64 @@
             border: 2px solid #e2e8f0;
         }
 
+        /* Distinct Cell Design for Pawns */
         .cell {
             background: var(--cell-bg);
-            border-radius: 6px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
 
         .cell:hover {
+            border-color: #94a3b8;
             background: var(--cell-hover);
         }
 
         .cell.valid {
-            background: #dbeafe;
-            box-shadow: inset 0 0 0 2px var(--p1-color);
+            background: #eff6ff;
+            border-color: #3b82f6;
+            box-shadow: inset 0 0 0 1px #3b82f6;
         }
 
         .pawn {
             width: 24px;
             height: 24px;
             border-radius: 50%;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.25);
             z-index: 5;
         }
 
         .pawn.p1 { background: var(--p1-color); }
         .pawn.p2 { background: var(--p2-color); }
 
-        /* Touchable Wall Slots */
+        /* Distinct Wall Slots Design */
         .wall-slot-h {
             background-color: var(--slot-bg);
-            border-radius: 3px;
+            border: 1px dashed var(--slot-border);
+            border-radius: 4px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
         .wall-slot-h:hover {
             background-color: var(--slot-hover);
+            border-color: #f59e0b;
         }
 
         .wall-slot-v {
             background-color: var(--slot-bg);
-            border-radius: 3px;
+            border: 1px dashed var(--slot-border);
+            border-radius: 4px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
         .wall-slot-v:hover {
             background-color: var(--slot-hover);
+            border-color: #f59e0b;
         }
 
         .intersection {
@@ -196,8 +206,9 @@
 
         .placed-wall {
             background-color: var(--wall-color) !important;
-            border-radius: 4px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            border: none !important;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             cursor: default !important;
         }
 
@@ -368,6 +379,16 @@
                         const nnc = nc + d.c;
                         if (nnr >= 0 && nnr < 9 && nnc >= 0 && nnc < 9 && !isWallBetween(nr, nc, nnr, nnc)) {
                             moves.push({ r: nnr, c: nnc });
+                        } else {
+                            // Diagonal jumps if opponent is blocked behind
+                            const sideDirs = d.r !== 0 ? [{ r: 0, c: -1 }, { r: 0, c: 1 }] : [{ r: -1, c: 0 }, { r: 1, c: 0 }];
+                            sideDirs.forEach(sd => {
+                                const snr = nr + sd.r;
+                                const snc = nc + sd.c;
+                                if (snr >= 0 && snr < 9 && snc >= 0 && snc < 9 && !isWallBetween(nr, nc, snr, snc)) {
+                                    moves.push({ r: snr, c: snc });
+                                }
+                            });
                         }
                     } else {
                         moves.push({ r: nr, c: nc });
@@ -379,13 +400,15 @@
 
         function isWallBetween(r1, c1, r2, c2) {
             if (r1 === r2) {
-                const minC = Math.min(c1, c2);
-                if (r1 > 0 && vWalls[r1 - 1][minC]) return true;
-                if (r1 < 8 && vWalls[r1][minC]) return true;
+                // Horizontal movement across column boundary `c`
+                const c = Math.min(c1, c2);
+                if (r1 < 8 && vWalls[r1][c]) return true;
+                if (r1 > 0 && vWalls[r1 - 1][c]) return true;
             } else if (c1 === c2) {
-                const minR = Math.min(r1, r2);
-                if (c1 > 0 && hWalls[minR][c1 - 1]) return true;
-                if (c1 < 8 && hWalls[minR][c1]) return true;
+                // Vertical movement across row boundary `r`
+                const r = Math.min(r1, r2);
+                if (c1 < 8 && hWalls[r][c1]) return true;
+                if (c1 > 0 && hWalls[r][c1 - 1]) return true;
             }
             return false;
         }
@@ -473,7 +496,7 @@
             const oppPawn = turn === 1 ? p2 : p1;
             const validMoves = getValidMoves(currPawn, oppPawn);
 
-            // 1. Render Cells
+            // 1. Render Cells (White Tile Style)
             for (let r = 0; r < 9; r++) {
                 for (let c = 0; c < 9; c++) {
                     const cell = document.createElement('div');
@@ -500,7 +523,7 @@
                 }
             }
 
-            // 2. Render Horizontal Wall Slots
+            // 2. Render Horizontal Wall Slots (Dashed Style)
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
                     const slot = document.createElement('div');
@@ -518,11 +541,10 @@
                 }
             }
 
-            // 3. Render Vertical Wall Slots
+            // 3. Render Vertical Wall Slots (Dashed Style)
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
                     const slot = document.createElement('div');
-                    slot.className.value = 'wall-slot-v';
                     slot.style.gridRow = `${(r * 2) + 1} / span 3`;
                     slot.style.gridColumn = (c * 2) + 2;
                     slot.className = 'wall-slot-v';
